@@ -237,7 +237,7 @@ namespace Weikio.PluginFramework.Catalogs
                 // filter out duplicate file names
                 var filteredPaths = GetRealDistinctFilePaths(paths);
 
-                var resolver = new PathAssemblyResolver(paths);
+                var resolver = new PathAssemblyResolver(filteredPaths);
 
                 // We use the metadata (readonly) versions of the assemblies before loading them
                 using (var metadataContext = new MetadataLoadContext(resolver))
