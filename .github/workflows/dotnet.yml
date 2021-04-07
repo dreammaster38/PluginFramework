@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest    
     steps:
     - uses: actions/checkout@v2
+    - name: DIRIT
+      run: ls -R
     - name: Setup .NET
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 3.1.x
-    - name: DIR
-      run: ls -l
     - name: Restore dependencies
       run: dotnet restore PluginFramework.sln
     - name: Build
