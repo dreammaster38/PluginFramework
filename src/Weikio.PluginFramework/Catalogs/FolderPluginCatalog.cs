@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -234,6 +234,8 @@ namespace Weikio.PluginFramework.Catalogs
                 }
 
                 paths = paths.Distinct().ToList();
+                // filter out duplicate file names
+                var filteredPaths = GetRealDistinctFilePaths(paths);
 
                 var resolver = new PathAssemblyResolver(paths);
 
@@ -293,6 +295,37 @@ namespace Weikio.PluginFramework.Catalogs
                 var dlls = Directory.GetFiles(assemblyDirectory, "*.dll");
                 paths.AddRange(dlls);
             }
+        }
+
+        /// <summary>
+        /// Iterates over the given paths collection and constructs
+        /// a dictionary with file name as key and file path as value
+        /// for each distinct file name.
+        /// </summary>
+        /// <param name="paths">A collection containing file path information.</param>
+        /// <returns>A dictionary with file name as key and complete file path as value</returns>
+        private Dictionary<string, string> GetRealDistinctFilePaths(IEnumerable<string> paths)
+        {
+            var files = new Dictionary<string, string>();
+
+            //var duplicateNames = from filePath in paths
+            //                     let filename = Path.GetFileName(filePath)
+            //                     group filePath by filename into files
+            //                     where files.Count() > 1
+            //                     select files;
+
+            foreach (var filePath in paths)
+            {
+                var fName = Path.GetFileName(filePath);
+                // Hey file! Are you there yet?
+                if (!files.ContainsKey(fName))
+                {
+                    // Nope! Please add me.
+                    files.Add(fName, filePath);
+                }
+            }
+
+            return files;
         }
     }
 }
