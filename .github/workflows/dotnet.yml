@@ -15,8 +15,10 @@ jobs:
     runs-on: ubuntu-latest    
     steps:
     - uses: actions/checkout@v2
-    - name: DIRIT
-      run: ls -R
+    - name: Install Info
+      run: |
+           echo "Root Directory"
+           ls -l .
     - name: Setup .NET
       uses: actions/setup-dotnet@v1
       with:
