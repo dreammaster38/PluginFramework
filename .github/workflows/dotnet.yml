@@ -6,19 +6,11 @@ on:
   pull_request:
     branches: [ master ]
 
-defaults:
-    run:
-      working-directory: ./build
-
 jobs:
   build:
     runs-on: ubuntu-latest    
     steps:
     - uses: actions/checkout@master
-    - name: Install Info
-      run: |
-           echo "Root Directory"
-           ls -l .
     - name: Setup .NET
       uses: actions/setup-dotnet@v1
       with:
