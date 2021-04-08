@@ -15,6 +15,11 @@ jobs:
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 3.1.x
+    - name: Setup NuGet.exe for use with actions
+      uses: NuGet/setup-nuget@v1.0.5
+      with:
+        nuget-version: '5.x'
+    - run: nuget restore ./src/PluginFramework.sln
     - name: Restore dependencies
       working-directory: src
       run: dotnet restore
