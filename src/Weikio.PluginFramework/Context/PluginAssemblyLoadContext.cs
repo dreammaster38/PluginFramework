@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -19,6 +21,7 @@ namespace Weikio.PluginFramework.Context
         private readonly string _pluginPath;
         private readonly AssemblyDependencyResolver _resolver;
         private readonly PluginLoadContextOptions _options;
+        private readonly List<RuntimeAssemblyHint> _runtimeAssemblyHints;
 
         public PluginAssemblyLoadContext(Assembly assembly, PluginLoadContextOptions options = null) : this(assembly.Location, options)
         {
@@ -29,6 +32,13 @@ namespace Weikio.PluginFramework.Context
             _pluginPath = pluginPath;
             _resolver = new AssemblyDependencyResolver(pluginPath);
             _options = options ?? new PluginLoadContextOptions();
+            
+            _runtimeAssemblyHints = _options.RuntimeAssemblyHints;
+
+            if (_runtimeAssemblyHints == null)
+            {
+                _runtimeAssemblyHints = new List<RuntimeAssemblyHint>();
+            }
         }
 
         public Assembly Load()
@@ -46,24 +56,35 @@ namespace Weikio.PluginFramework.Context
 
             if (TryUseHostApplicationAssembly(assemblyName))
             {
-                try
-                {
-                    var defaultAssembly = Default.LoadFromAssemblyName(assemblyName);
+                var foundFromHostApplication = LoadHostApplicationAssembly(assemblyName);
 
+                if (foundFromHostApplication)
+                {
                     Log(LogLevel.Debug, "Assembly {AssemblyName} is available through host application's AssemblyLoadContext. Use it. ", ex: null,
                         assemblyName);
 
                     return null;
                 }
-                catch
-                {
-                    Log(LogLevel.Debug,
-                        "Host application's AssemblyLoadContext doesn't contain {AssemblyName}. Try to resolve it through the plugin's references.", ex: null,
-                        assemblyName);
-                }
+
+                Log(LogLevel.Debug,
+                    "Host application's AssemblyLoadContext doesn't contain {AssemblyName}. Try to resolve it through the plugin's references.", ex: null,
+                    assemblyName);
             }
 
-            var assemblyPath = _resolver.ResolveAssemblyToPath(assemblyName);
+            string assemblyPath;
+
+            var assemblyFileName = assemblyName.Name + ".dll";
+
+            if (_runtimeAssemblyHints.Any(x => string.Equals(assemblyFileName, x.FileName)))
+            {
+                Log(LogLevel.Debug, "Found assembly hint for {AssemblyName}", ex: null, assemblyName);
+                assemblyPath = _runtimeAssemblyHints.First(x => string.Equals(assemblyFileName, x.FileName)).Path;
+            }
+            else
+            {
+                Log(LogLevel.Debug, "No assembly hint found for {AssemblyName}. Using the default resolver for locating the file", ex: null, assemblyName);
+                assemblyPath = _resolver.ResolveAssemblyToPath(assemblyName);
+            }
 
             if (assemblyPath != null)
             {
@@ -71,6 +92,19 @@ namespace Weikio.PluginFramework.Context
 
                 var result = LoadFromAssemblyPath(assemblyPath);
                 return result;
+            }
+
+            if (_options.UseHostApplicationAssemblies == UseHostApplicationAssembliesEnum.PreferPlugin)
+            {
+                var foundFromHostApplication = LoadHostApplicationAssembly(assemblyName);
+
+                if (foundFromHostApplication)
+                {
+                    Log(LogLevel.Debug, "Assembly {AssemblyName} not available from plugin's references but is available through host application's AssemblyLoadContext. Use it. ", ex: null,
+                        assemblyName);
+
+                    return null;
+                }
             }
 
             if (_options.AdditionalRuntimePaths?.Any() != true)
@@ -84,7 +118,7 @@ namespace Weikio.PluginFramework.Context
             // Try to locate the required dll using AdditionalRuntimePaths
             foreach (var runtimePath in _options.AdditionalRuntimePaths)
             {
-                var fileName = assemblyName.Name + ".dll";
+                var fileName = assemblyFileName;
                 var filePath = Directory.GetFiles(runtimePath, fileName, SearchOption.AllDirectories).FirstOrDefault();
 
                 if (filePath != null)
@@ -99,7 +133,7 @@ namespace Weikio.PluginFramework.Context
 
             return null;
         }
-        
+
         private bool TryUseHostApplicationAssembly(AssemblyName assemblyName)
         {
             Log(LogLevel.Debug, "Determining if {AssemblyName} should be loaded from host application's or from plugin's AssemblyLoadContext",
@@ -120,25 +154,59 @@ namespace Weikio.PluginFramework.Context
                 return true;
             }
 
-            var name = assemblyName.Name;
+            if (_options.UseHostApplicationAssemblies == UseHostApplicationAssembliesEnum.Selected)
+            {
+                var name = assemblyName.Name;
 
-            var result = _options.HostApplicationAssemblies?.Any(x => string.Equals(x.Name, name, StringComparison.InvariantCultureIgnoreCase)) == true;
+                var result = _options.HostApplicationAssemblies?.Any(x => string.Equals(x.Name, name, StringComparison.InvariantCultureIgnoreCase)) == true;
 
-            Log(LogLevel.Debug, "UseHostApplicationAssemblies is set to Selected. {AssemblyName} listed in the HostApplicationAssemblies: {Result}", ex: null,
-                assemblyName, result);
+                Log(LogLevel.Debug, "UseHostApplicationAssemblies is set to Selected. {AssemblyName} listed in the HostApplicationAssemblies: {Result}", ex: null,
+                    assemblyName, result);
 
-            return result;
+                return result;
+            }
+
+            if (_options.UseHostApplicationAssemblies == UseHostApplicationAssembliesEnum.PreferPlugin)
+            {
+                Log(LogLevel.Debug, "UseHostApplicationAssemblies is set to PreferPlugin. Try to load assembly from plugin's AssemblyLoadContext and fallback to host application's AssemblyLoadContext",
+                    args: assemblyName);
+
+                return false;
+            }
+            
+            return false;
         }
 
+        private bool LoadHostApplicationAssembly(AssemblyName assemblyName)
+        {
+            try
+            {
+                Default.LoadFromAssemblyName(assemblyName);
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
         protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
         {
+            var nativeHint = _runtimeAssemblyHints.FirstOrDefault(x => x.IsNative && string.Equals(x.FileName, unmanagedDllName));
+
+            if (nativeHint != null)
+            {
+                return  LoadUnmanagedDllFromPath(nativeHint.Path);
+            }
+            
             var libraryPath = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);
 
             if (libraryPath != null)
             {
                 return LoadUnmanagedDllFromPath(libraryPath);
             }
-
+            
             return IntPtr.Zero;
         }
 

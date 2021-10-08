@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TestIntefaces\TestIntefaces.csproj" />
+    <ProjectReference Include="..\TestIntefaces\TestIntefaces.csproj"/>
   </ItemGroup>
-  
+
 </Project>
